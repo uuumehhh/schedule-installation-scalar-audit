@@ -1,0 +1,77 @@
+{
+  "schema": "scalar-audit-public-release-v1",
+  "version": "v1.0.0",
+  "archive_sha256": "5d7c6bf0ebd4ac8cca2a1a6fe6959456e5b80939ae37b442db3f12949dcd494a",
+  "licenses": {
+    "code_and_original_documentation": "MIT",
+    "scalars_expected_output_manifests": "CC0-1.0"
+  },
+  "science_execution": false,
+  "files": [
+    {
+      "path": ".gitattributes",
+      "bytes": 9,
+      "sha256": "8b9c3028d6467ff3be7c793141927841d70f47f52d0590677438f488ca154992"
+    },
+    {
+      "path": ".gitignore",
+      "bytes": 27,
+      "sha256": "22f1b31d6cb73fc294c8b16f21cb3d2547de33eac8694a68127a7f181a12638c"
+    },
+    {
+      "path": "archive/scalar_candidate113.zip",
+      "bytes": 5850,
+      "sha256": "5d7c6bf0ebd4ac8cca2a1a6fe6959456e5b80939ae37b442db3f12949dcd494a"
+    },
+    {
+      "path": "LICENSE",
+      "bytes": 1099,
+      "sha256": "b822eabf554b272ee0061ef1c170b985e6126325f5a9ac1911071531765eeadb"
+    },
+    {
+      "path": "LICENSES/CC0-1.0.txt",
+      "bytes": 7048,
+      "sha256": "a2010f343487d3f7618affe54f789f5487602331c0a8d03f49e9a7c547cf0499"
+    },
+    {
+      "path": "LICENSES/NOTICE.md",
+      "bytes": 871,
+      "sha256": "550020cb9304a10a54fed770e3c583dba0ebf4c530320167d71fb09b592613bd"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3029,
+      "sha256": "66f3578ab1a2247eadad82bd9e41defc1c9071e69463745c46235f06a76e2776"
+    },
+    {
+      "path": "reproduce/audit.py",
+      "bytes": 5697,
+      "sha256": "760b1335cf3b934afc923eb8decf798cb26eab8bc5bd61c77d35c448b5941f5c"
+    },
+    {
+      "path": "reproduce/cells.json",
+      "bytes": 6460,
+      "sha256": "8f016fa2ea688a37c0500f55512efe063d963da8de8b09d56ac410ecae6548ff"
+    },
+    {
+      "path": "reproduce/expected_results.json",
+      "bytes": 21645,
+      "sha256": "91dbd5936a14fc9155391cb4ed9c95ed011f1ca2c813d16d22f352f7f3f19b29"
+    },
+    {
+      "path": "reproduce/manifest.json",
+      "bytes": 742,
+      "sha256": "9dd1f2b38623c6f674c9e56f54c16449bf644ca5483166e55803a0073506aa6f"
+    },
+    {
+      "path": "reproduce/README.md",
+      "bytes": 2012,
+      "sha256": "e6ebfbde99e53e186c246c10655680012529eb3de4b7cc9a3fc8ab5cbe318bb4"
+    },
+    {
+      "path": "verify.py",
+      "bytes": 1073,
+      "sha256": "368d8365eb255ccc87aa02cd954865d8737bbce886d7f82d4f7755885c64c82e"
+    }
+  ]
+}

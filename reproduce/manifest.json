@@ -1,0 +1,26 @@
+{
+  "schema": "scalar-audit-candidate-v1",
+  "release_decision": "license and external publication pending",
+  "files": [
+    {
+      "file": "audit.py",
+      "bytes": 5697,
+      "sha256": "760b1335cf3b934afc923eb8decf798cb26eab8bc5bd61c77d35c448b5941f5c"
+    },
+    {
+      "file": "cells.json",
+      "bytes": 6460,
+      "sha256": "8f016fa2ea688a37c0500f55512efe063d963da8de8b09d56ac410ecae6548ff"
+    },
+    {
+      "file": "expected_results.json",
+      "bytes": 21645,
+      "sha256": "91dbd5936a14fc9155391cb4ed9c95ed011f1ca2c813d16d22f352f7f3f19b29"
+    },
+    {
+      "file": "README.md",
+      "bytes": 2012,
+      "sha256": "e6ebfbde99e53e186c246c10655680012529eb3de4b7cc9a3fc8ab5cbe318bb4"
+    }
+  ]
+}
