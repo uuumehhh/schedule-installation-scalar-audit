@@ -40,3 +40,14 @@ The archive and its internal README are an unchanged pre-release snapshot. The i
 Code and original documentation: MIT (`LICENSE`). Scalar data, expected arithmetic and manifests: CC0 1.0 (`LICENSES/CC0-1.0.txt`). These terms apply to this artifact only. Repository revisions and the version tag identify the published state; `release_manifest.json` binds individual files by SHA-256.
 
 This public repository identifies its hosting account. Its public URL is not a certification of anonymous-submission compliance; any submission link must follow the venue's applicable policy.
+
+## Additional public replay and sensitivity artifacts
+
+The scope above describes the original `v1.0.0` scalar artifact. Related source and input packages are available separately:
+
+- [Planning and physics source/input capsule (`v2.0.1`)](https://github.com/uuumehhh/schedule-installation-scalar-audit/releases/tag/v2.0.1).
+- [Sensitivity runtime source (`sensitivity-runtime-v1.0.0`)](https://github.com/uuumehhh/schedule-installation-scalar-audit/releases/tag/sensitivity-runtime-v1.0.0).
+
+On 3 November 2026, the unchanged sensitivity package's completed-workspace importer was exercised once against the already-completed author-host nominal workspace. It verified 650 unique file hashes and the recorded links for 26 runs and 32 budget/world views. Its saved-JSON scalar projection matched an independent reconstruction and, separately, the author reference. The check completed in 9.634 seconds within a 600-second cap. It performed no new physics, optimization or array decoding.
+
+The [machine-readable validation record](validation/completed-workspace-import124.json) gives the exact scope and public source hashes. This closes the actual completed-workspace importer compatibility check. Fresh-host reproduction, relocated physical execution, numerical/graphics portability and full R52 sensitivity execution remain unverified. The recorded O/T/E/S values belong to the prior runs and are not new trials.
