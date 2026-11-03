@@ -1,0 +1,67 @@
+{
+  "schema": "completed-workspace-import-validation-v1",
+  "date_utc": "2026-11-03T09:30:16.021Z",
+  "tested_artifact": "sensitivity-runtime-v1.0.0",
+  "artifact_archive_sha256": "dddfa1601fa70350c9094d2e9626d170859fb5fbf1e54955704a80a4bb9be4ae",
+  "operation": "One call to the unchanged public nominal122.import_completed against an already-completed author-host nominal workspace",
+  "source_modules_sha256": {
+    "nominal122.py": "4b8a471816585c5f6e528b5b49ff360dc12c24f40a4ddfbeb50e63b41f30c74b",
+    "portable122.py": "9a336617d3432b235fb421eb0b53c4af1448f7576597ee0c8fd663cda0169d2e",
+    "nominal_projection122.py": "d1196cdaabe5a734812e1bf844cbde7fb34e70fc7cfaa656f1d149d09f4463bb"
+  },
+  "result": {
+    "passed": true,
+    "process_exit_code": 0,
+    "watchdog_exit_code": 0,
+    "child_count": 1,
+    "automatic_retries": 0,
+    "elapsed_including_observed_exit_s": 9.633882522583008,
+    "wall_cap_s": 600,
+    "nominal_runs": 26,
+    "budget_world_views": 32,
+    "unique_files_byte_hashed": 650,
+    "unique_verified_bytes": 1146327177,
+    "original_importer_hash_calls": 969,
+    "source_and_input_immutability_passed": true,
+    "independent_saved_scalar_projection_equal": true,
+    "author_reference_exact_equal": true,
+    "prohibited_operations": 0
+  },
+  "activity": {
+    "new_physics_runs": 0,
+    "new_physics_steps": 0,
+    "array_decodes": 0,
+    "new_scientific_trials": 0,
+    "provider_calls": 0
+  },
+  "scope": {
+    "author_host_completed_workspace_compatibility": true,
+    "source_manifest_and_context_joins_checked": true,
+    "saved_json_projection_checked": true,
+    "raw_signal_audit_reused_from_prior_completed_run": true,
+    "new_raw_signal_audit": false,
+    "relocated_physical_execution": false,
+    "fresh_host_reproduction": false,
+    "full_R52_sensitivity_execution": false,
+    "numerical_or_graphics_portability": false
+  },
+  "historical_saved_run_true_counts": {
+    "original_success": 26,
+    "task_contact": 26,
+    "external_7p99mm": 22,
+    "strict": 0,
+    "reversal_and_goal": 26,
+    "these_are_not_new_trials": true
+  },
+  "local_evidence_sha256": {
+    "actual_result": "57a101847315543010f93744ecf073dfe145f6b728026caea7de9cef4077a00b",
+    "root_closure": "877229028cf33b3841b4d4db0e1d2ff9770a46af4322df1713f42469511914b9"
+  },
+  "limits": [
+    "The test exercised existing saved outputs. It did not rerun the producer, simulator, optimizer or saved-array science auditor.",
+    "The nominal source/input closure belongs to the previously completed author-host replay; this does not certify an uninterrupted full search-to-physics workflow.",
+    "Unique verified bytes and original importer hash calls are not total operating-system I/O measurements.",
+    "The author-reference equality is an observed comparison, not a substitute for imported data or a population-level result."
+  ],
+  "publication_contents": "Aggregate verification status, public source hashes and non-identifying evidence hashes only; no local paths, credentials, raw arrays, reviewer responses or conversation."
+}
