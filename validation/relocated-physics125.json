@@ -1,0 +1,120 @@
+{
+  "schema": "same-host-relocated-physics-replay125-v1",
+  "status": "physics_and_in_run_saved_array_audit_complete_outer_provenance_closure_incomplete",
+  "date_utc": "2026-11-04",
+  "scope": {
+    "same_host": true,
+    "newly_assembled_venv": true,
+    "relocated_capsule": true,
+    "new_machine": false,
+    "new_task": false,
+    "new_scientific_samples": false,
+    "uninterrupted_search_to_physics": false,
+    "full_sensitivity_execution": false,
+    "raw_array_identity_claimed": false
+  },
+  "unchanged_public_inventory_sha256": "bae31f4e36f62b60be92a998e24f3719a9cf345936e172d7fb86fdfa4891e548",
+  "runtime": {
+    "python": "CPython3.12.14",
+    "numpy": "2.3.5",
+    "scipy": "1.18.1",
+    "mujoco": "3.12.0",
+    "platform": "Windows-11-10.0.26100-SP0",
+    "requested_graphics_backend": "glfw",
+    "effective_backend_verified": false,
+    "gl_vendor": null,
+    "gl_renderer": null,
+    "gl_version": null,
+    "gpu_driver": null,
+    "recorded_scientific_module_locations_under_new_venv": true,
+    "recorded_capsule_source_locations_under_new_workspace": true,
+    "post_run_environment_hash_closure_completed": false
+  },
+  "counts": {
+    "unique_runs": 26,
+    "views": 32,
+    "physical_success": 26,
+    "task_contact_success": 26,
+    "roundtrip_goal": 26,
+    "external_7p99": 22,
+    "strict_success": 0,
+    "unknown": 2,
+    "correct_classification": 24,
+    "closure_failed": 26,
+    "terminal_tracking_failed": 25,
+    "physics_steps": 1092000,
+    "rgbd_bundles": 26,
+    "render_passes": 52,
+    "optimizer_calls": 0,
+    "shared_low_high_views": 6
+  },
+  "declared_comparison": {
+    "numeric_fields": 1881,
+    "nonzero_differences": 0,
+    "tolerances_changed": false,
+    "raw_array_identity": false
+  },
+  "policies": [
+    {
+      "budget": "low",
+      "best_fixed": "fixed475",
+      "original_success_per_policy": 8,
+      "world_views_per_policy": 8,
+      "M_denominator": 4,
+      "selector_minus_best_fixed_success_count": 0,
+      "selector_minus_best_fixed_M_m": -0.001884213551520698,
+      "relative_signal_met": false,
+      "policies_overlap": true
+    },
+    {
+      "budget": "high",
+      "best_fixed": "fixed425",
+      "original_success_per_policy": 8,
+      "world_views_per_policy": 8,
+      "M_denominator": 4,
+      "selector_minus_best_fixed_success_count": 0,
+      "selector_minus_best_fixed_M_m": -0.00001459199860206345,
+      "relative_signal_met": false,
+      "policies_overlap": true
+    }
+  ],
+  "completion": {
+    "public_launcher_exit_code": 0,
+    "public_completion": true,
+    "in_run_saved_array_audit_passed": true,
+    "audited_runs": 26,
+    "audited_views": 32,
+    "original_outer_exit_code": 1,
+    "outer_complete": false,
+    "owned_family_quiescent": true,
+    "outer_deadline_seconds": 1800,
+    "public_completion_before_outer_deadline": true
+  },
+  "outer_failure": {
+    "source": "observer-origin classifier",
+    "blocked_local_hostname_query_count": 1,
+    "other_recorded_denials": 0,
+    "module_origin_exceptions": 0,
+    "native_image_exceptions": 1,
+    "native_image_exception": "Microsoft-signed Windows Defender anti-virus module outside the configured Windows-root allowlist",
+    "exact_module_sha256": "f4bf2fbdfef5fd081dfcc92cac458832040888c0c1c0e1905f38e0e3ca864c9b",
+    "post_run_signature_status": "Valid",
+    "signature_is_historical_in_process_byte_attestation": false,
+    "does_not_prove_all_native_networking_absent": true,
+    "reconciliation_attempt": "Approved read-only closure started after the original deadline and stopped before its one-use claim; a shell initialization warning was recorded. Exact startup delay was not separately measured.",
+    "reconciliation_exit_code": 1,
+    "reconciliation_completed": false,
+    "no_retry_or_budget_extension": true
+  },
+  "evidence_sha256": {
+    "launcher": "c31a1522426e68fb1eef4407fc0d5485e3bcae6df80c397984881636be2d7ac3",
+    "completion": "295307ad9780898dbd444c5ffd3bcfb647f70b7d708c2d28f8d3096ff44b13fd",
+    "independent_saved_array_audit": "3c2a8fcb81a9a1a2abcbcadf6b31d5ff04cacba55065867bdf83e81bfde24c50",
+    "pending_result": "80e60e3c04fdd602a1a65094147f62304ae78a7f835b978bebe4831016af4b1c",
+    "policy_comparison": "2cbbdd2b7b422f1ef506d092b977ca918ec31100a48460521ddcc786780e0048",
+    "original_outer_receipt": "ce02e33127926e65865d7722cd40bec178466f4edc723a9aaadba0f5a73b21f7",
+    "original_outer_exit": "03268ae40c19bbc7b4335e4fbbc2d9b9a754ae9744fccab4a3bdc62e2c655f85",
+    "reconciliation_attempt_failure": "c70d1b0374b11eeed5e59d656314b6b64daf8d248af35e65bd24ef5df1f91e5d"
+  },
+  "interpretation": "Observed author-host MuJoCo simulation replay in relocated software with executed saved-array audit and exact declared field agreement; not a completely closed environment-provenance verification, fresh-host replication, new manipulation result, or evidence of stronger selector utility."
+}
