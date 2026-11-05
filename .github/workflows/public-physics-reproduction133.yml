@@ -1,0 +1,255 @@
+name: Public physics replay on a separate standard Windows host
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-physics-replay-windows
+  cancel-in-progress: false
+
+jobs:
+  physics-only:
+    name: Physics-only public-package replay; not search-to-physics
+    runs-on: windows-2022
+    timeout-minutes: 45
+    env:
+      PACKAGE_URL: https://github.com/uuumehhh/schedule-installation-scalar-audit/releases/download/v2.0.1/full_reproduction122_v2.zip
+      PACKAGE_SHA256: 4c2e48e1711564791cb5a62291fe48edd60b057480146de6be37acb97a5a925f
+      PYTHON_URL: https://releases.astral.sh/github/python-build-standalone/releases/download/20260901/cpython-3.12.14%2B20260901-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
+      PYTHON_SHA256: 7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14
+      LOCK_SHA256: c4e51265864da6454744b913e6ff0d522d4e8a5a1345211e49466d00c17f7d64
+      EXPECTED_PHYSICS_INVENTORY_SHA256: bae31f4e36f62b60be92a998e24f3719a9cf345936e172d7fb86fdfa4891e548
+    steps:
+      - name: Acquisition and installation only
+        shell: pwsh
+        timeout-minutes: 12
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stage = Join-Path $env:RUNNER_TEMP 'so101-public-physics'
+          $packageZip = Join-Path $stage 'full_reproduction122_v2.zip'
+          $packageRoot = Join-Path $stage 'package'
+          $pythonArchive = Join-Path $stage 'python.tar.gz'
+          $pythonRoot = Join-Path $stage 'python-base'
+          $venv = Join-Path $stage 'venv'
+          $output = Join-Path $stage 'physics-output'
+          New-Item -ItemType Directory -Path $stage,$packageRoot,$pythonRoot | Out-Null
+
+          Invoke-WebRequest -Uri $env:PACKAGE_URL -OutFile $packageZip
+          if ((Get-FileHash -LiteralPath $packageZip -Algorithm SHA256).Hash.ToLower() -ne $env:PACKAGE_SHA256) { throw 'Public package hash mismatch.' }
+          Expand-Archive -LiteralPath $packageZip -DestinationPath $packageRoot
+          if (-not (Test-Path -LiteralPath (Join-Path $packageRoot 'physics/physics_replay114.py'))) { throw 'Unexpected public package root.' }
+          $physicsInventory = Join-Path $packageRoot 'physics/release_inventory114.json'
+          if ((Get-FileHash -LiteralPath $physicsInventory -Algorithm SHA256).Hash.ToLower() -ne $env:EXPECTED_PHYSICS_INVENTORY_SHA256) { throw 'Physics inventory hash mismatch.' }
+          $lock = Join-Path $packageRoot 'requirements_win_cp312114.lock'
+          if ((Get-FileHash -LiteralPath $lock -Algorithm SHA256).Hash.ToLower() -ne $env:LOCK_SHA256) { throw 'Dependency lock hash mismatch.' }
+
+          Invoke-WebRequest -Uri $env:PYTHON_URL -OutFile $pythonArchive
+          if ((Get-FileHash -LiteralPath $pythonArchive -Algorithm SHA256).Hash.ToLower() -ne $env:PYTHON_SHA256) { throw 'Python archive hash mismatch.' }
+          tar.exe -xzf $pythonArchive -C $pythonRoot
+          if ($LASTEXITCODE -ne 0) { throw 'Python extraction failed.' }
+          $basePython = Join-Path $pythonRoot 'python/python.exe'
+          & $basePython -m venv $venv
+          if ($LASTEXITCODE -ne 0) { throw 'Isolated environment creation failed.' }
+          $researchPython = Join-Path $venv 'Scripts/python.exe'
+          if ((& $researchPython -c "import platform; print(platform.python_version())").Trim() -ne '3.12.14') { throw 'Python version mismatch.' }
+          & $researchPython -m pip install --disable-pip-version-check --only-binary=:all: --no-deps --require-hashes -r $lock
+          if ($LASTEXITCODE -ne 0) { throw 'Hash-pinned dependency installation failed.' }
+          & $researchPython -m pip check
+          if ($LASTEXITCODE -ne 0) { throw 'Dependency consistency check failed.' }
+
+
+          $identityCode = @'
+          import ctypes, json, sys
+          buffer = ctypes.create_unicode_buffer(32768)
+          count = ctypes.windll.kernel32.GetModuleFileNameW(None, buffer, len(buffer))
+          if not count or count >= len(buffer): raise RuntimeError('Cannot identify running interpreter image')
+          print(json.dumps({'sys_executable':sys.executable,'base_executable':sys._base_executable,'running_image':buffer.value}))
+          '@
+          $identity = (& $researchPython -I -B -c $identityCode) | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0) { throw 'Interpreter identity failed.' }
+          $images = @($researchPython,$basePython,$identity.sys_executable,$identity.base_executable,$identity.running_image) | ForEach-Object { [IO.Path]::GetFullPath($_) } | Select-Object -Unique
+          foreach ($p in $images) {
+            if (-not $p.StartsWith([IO.Path]::GetFullPath($stage) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $p -PathType Leaf)) { throw 'Unexpected interpreter image outside isolated installation.' }
+          }
+          $identity | ConvertTo-Json -Compress | Write-Output
+          $imageJson = ConvertTo-Json -InputObject @($images) -Compress
+          "SCIENTIFIC_IMAGES=$imageJson" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+          "PACKAGE_ROOT=$packageRoot" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "BASE_PYTHON=$basePython" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RESEARCH_PYTHON=$researchPython" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "REPLAY_OUTPUT=$output" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+
+      - name: Fixed renderer capability check (not scientific replay)
+        shell: pwsh
+        timeout-minutes: 1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:MUJOCO_GL = 'glfw'
+          $smoke = @'
+          import json, time
+          import mujoco
+          from OpenGL import GL
+          started=time.monotonic()
+          model=mujoco.MjModel.from_xml_string('<mujoco><worldbody><light pos="0 0 2"/><geom type="sphere" size="0.1" pos="0 0 0"/></worldbody></mujoco>')
+          data=mujoco.MjData(model)
+          mujoco.mj_forward(model,data)
+          with mujoco.Renderer(model,height=64,width=64) as renderer:
+              renderer.update_scene(data)
+              rgb=renderer.render()
+              renderer.enable_depth_rendering()
+              depth=renderer.render()
+              identity={}
+              for key,value in [('vendor',GL.GL_VENDOR),('renderer',GL.GL_RENDERER),('version',GL.GL_VERSION)]:
+                  found=GL.glGetString(value)
+                  identity[key]=found.decode(errors='replace') if found else None
+              if rgb.shape!=(64,64,3) or depth.shape!=(64,64): raise RuntimeError('Renderer shape mismatch')
+          elapsed=time.monotonic()-started
+          if elapsed>60: raise RuntimeError('Capability deadline exceeded')
+          print(json.dumps({'kind':'synthetic_renderer_capability_only','complete':True,'physics_steps':0,'synthetic_forward_calls':1,'synthetic_render_calls':2,'elapsed_seconds':elapsed,'capability_context_GL':identity,'does_not_identify_later_physics_context':True}))
+          '@
+          $smokePath = Join-Path $env:RUNNER_TEMP 'fixed_renderer_capability133.py'
+          Set-Content -LiteralPath $smokePath -Value $smoke -Encoding utf8
+          & $env:RESEARCH_PYTHON -I -B $smokePath
+          if ($LASTEXITCODE -ne 0) { throw 'Fixed renderer unavailable; scientific replay will not start.' }
+
+      - name: Scientific physics replay and saved-output audit (30 minute hard step cap)
+        shell: pwsh
+        timeout-minutes: 30
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Set-Location -LiteralPath $env:PACKAGE_ROOT
+          $scienceClock = [Diagnostics.Stopwatch]::StartNew()
+          & $env:RESEARCH_PYTHON -I -B -X utf8 physics/physics_replay114.py verify
+          if ($LASTEXITCODE -ne 0) { throw 'Public physics inventory verification failed.' }
+          & $env:RESEARCH_PYTHON -I -B -X utf8 physics/physics_replay114.py preflight
+          if ($LASTEXITCODE -ne 0) { throw 'Public physics preflight failed.' }
+
+          # Block only the scientific interpreter, not the Actions runner agent.
+          # Acquisition is already complete; the replay contract needs no network data.
+          $rule = "SO101-public-physics-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
+          $profiles = @(Get-NetFirewallProfile)
+          $profiles | Select-Object Name,Enabled | ConvertTo-Json -Compress | Write-Output
+          $activeNames = @(Get-NetConnectionProfile | ForEach-Object {
+            switch ($_.NetworkCategory.ToString()) {
+              'DomainAuthenticated' { 'Domain' }
+              'Private' { 'Private' }
+              'Public' { 'Public' }
+              default { throw 'Unknown active firewall profile category.' }
+            }
+          } | Select-Object -Unique)
+          Write-Output ('ACTIVE_FIREWALL_PROFILES ' + ($activeNames -join ','))
+          if ($activeNames.Count -eq 0) { throw 'No active firewall profile could be established.' }
+          foreach ($activeName in $activeNames) {
+            $activeProfile = @($profiles | Where-Object { $_.Name -eq $activeName })
+            if ($activeProfile.Count -ne 1 -or $activeProfile[0].Enabled -ne $true) { throw 'Active firewall profile not enabled.' }
+          }
+          $firewallNames = @()
+          try {
+            $imageIndex = 0
+            foreach ($imagePath in ($env:SCIENTIFIC_IMAGES | ConvertFrom-Json)) {
+              $ruleName = "$rule-$imageIndex"
+              New-NetFirewallRule -Name $ruleName -DisplayName $ruleName -Direction Outbound -Program $imagePath -Action Block | Out-Null
+              $firewallNames += $ruleName
+              $ruleState = Get-NetFirewallRule -Name $ruleName
+              if ($ruleState.Enabled -ne 'True' -or $ruleState.Action -ne 'Block' -or $ruleState.Direction -ne 'Outbound') { throw 'Scientific firewall rule not active.' }
+              [ordered]@{name=$ruleName;program=$imagePath;enabled=$ruleState.Enabled.ToString();action=$ruleState.Action.ToString()} | ConvertTo-Json -Compress | Write-Output
+              $imageIndex += 1
+            }
+            & $env:RESEARCH_PYTHON -I -B -X utf8 physics/physics_replay114.py run --output $env:REPLAY_OUTPUT
+            if ($LASTEXITCODE -ne 0) { throw 'Physics replay failed; retain the workflow logs.' }
+          }
+          finally {
+            foreach ($ruleName in $firewallNames) { Remove-NetFirewallRule -Name $ruleName -ErrorAction SilentlyContinue }
+          }
+
+          $launcherPath = Join-Path $env:REPLAY_OUTPUT 'launcher_receipt114.json'
+          $auditPath = Join-Path $env:REPLAY_OUTPUT 'saved_results_audit114.json'
+          $results = Join-Path $env:REPLAY_OUTPUT 'capsule/results'
+          $pendingPath = Join-Path $results 'physics_result112_v2.pending.json'
+          $completionPath = Join-Path $results 'physics_completion112_v2.json'
+          $environmentPath = Join-Path $results 'runtime_environment_receipt112_v2.json'
+          $launcher = Get-Content -LiteralPath $launcherPath -Raw | ConvertFrom-Json
+          $audit = Get-Content -LiteralPath $auditPath -Raw | ConvertFrom-Json
+          $pending = Get-Content -LiteralPath $pendingPath -Raw | ConvertFrom-Json
+          $completion = Get-Content -LiteralPath $completionPath -Raw | ConvertFrom-Json
+          $runtime = Get-Content -LiteralPath $environmentPath -Raw | ConvertFrom-Json
+
+          if ($launcher.complete -ne $true -or $launcher.exit_code -ne 0 -or $launcher.timed_out -ne $false) { throw 'Launcher completion contract failed.' }
+          if ($audit.saved_json_audit_passed -ne $true -or $audit.policy_passed -ne $true -or $audit.runs_checked -ne 26 -or $audit.views_checked -ne 32) { throw 'Saved-output audit contract failed.' }
+          if ($completion.complete -ne $true -or $pending.complete -ne $false) { throw 'Hash-linked completion contract failed.' }
+          if ($pending.physical_replays -ne 26 -or $pending.view_count -ne 32 -or $pending.physics_steps -ne 1092000 -or $pending.rgbd_bundles -ne 26 -or $pending.render_passes -ne 52 -or $pending.optimizer_calls -ne 0) { throw 'Resource/count contract failed.' }
+
+          if ($scienceClock.Elapsed.TotalSeconds -gt 1800) { throw 'Outer scientific deadline exceeded.' }
+          $evidence = [ordered]@{
+            schema = 'so101-public-physics-github-hosted-windows-v1'
+            scope = 'physics-only fixed selected-command replay; not search-to-physics'
+            science_elapsed_seconds = $scienceClock.Elapsed.TotalSeconds
+            github_run_id = $env:GITHUB_RUN_ID
+            github_run_attempt = $env:GITHUB_RUN_ATTEMPT
+            runner_name = $env:RUNNER_NAME
+            image_os = $env:ImageOS
+            image_version = $env:ImageVersion
+            package_url = $env:PACKAGE_URL
+            package_sha256 = $env:PACKAGE_SHA256
+            python_version = (& $env:RESEARCH_PYTHON -c "import platform; print(platform.python_version())").Trim()
+            python_executable_sha256 = (Get-FileHash -LiteralPath $env:RESEARCH_PYTHON -Algorithm SHA256).Hash.ToLower()
+            dependency_lock_sha256 = $env:LOCK_SHA256
+            scientific_network_program_blocked = $true
+            physical_replays = 26
+            views = 32
+            physics_steps = 1092000
+            rgbd_bundles = 26
+            render_passes = 52
+            optimizer_calls = 0
+            separate_planning_fk_calls = 0
+            physics_internal_fk_occurs = $true
+            launcher_receipt_sha256 = (Get-FileHash -LiteralPath $launcherPath -Algorithm SHA256).Hash.ToLower()
+            saved_results_audit_sha256 = (Get-FileHash -LiteralPath $auditPath -Algorithm SHA256).Hash.ToLower()
+            completion_sha256 = (Get-FileHash -LiteralPath $completionPath -Algorithm SHA256).Hash.ToLower()
+            runtime_environment_sha256 = (Get-FileHash -LiteralPath $environmentPath -Algorithm SHA256).Hash.ToLower()
+            backend_requested = $runtime.graphics.backend_requested
+            backend_effective = $runtime.graphics.backend_effective
+            backend_effective_verified = $runtime.graphics.backend_effective_verified
+            gl_vendor = $runtime.graphics.gl_vendor
+            gl_renderer = $runtime.graphics.gl_renderer
+            gl_version = $runtime.graphics.gl_version
+            new_github_hosted_vm = $true
+            original_workstation_used = $false
+            evidence_interpretation = 'If this completes, it is different-host public-package physics evidence. Runner provenance and outputs remain subject to native result review. Current v2.0.1 bytes do not capture effective GL identity.'
+          }
+          $evidenceJson = $evidence | ConvertTo-Json -Depth 6
+          $evidenceJson | Out-File -LiteralPath (Join-Path $env:RUNNER_TEMP 'so101-public-physics-evidence.json') -Encoding utf8
+          "``````json`n$evidenceJson`n``````" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          $finalTiming = [ordered]@{schema='stage133-outer-final-timing-v1';elapsed_seconds=$scienceClock.Elapsed.TotalSeconds;limit_seconds=1800;complete=($scienceClock.Elapsed.TotalSeconds -le 1800)}
+          $finalTiming | ConvertTo-Json -Compress | Write-Output
+          if (-not $finalTiming.complete) { throw 'Outer deadline exceeded after evidence persistence.' }
+
+
+      - name: Preserve public terminal evidence in the job log
+        if: always()
+        shell: pwsh
+        timeout-minutes: 2
+        run: |
+          $ErrorActionPreference = 'Continue'
+          $stopToken = [guid]::NewGuid().ToString('N')
+          Write-Output "::stop-commands::$stopToken"
+          $stage = Join-Path $env:RUNNER_TEMP 'so101-public-physics'
+          $out = Join-Path $stage 'physics-output'
+          $publicNames = @('stdout.log','stderr.log','launcher_receipt114.json','saved_results_audit114.json','capsule/results/physics_completion112_v2.json','capsule/results/physics_result112_v2.pending.json','capsule/results/runtime_environment_receipt112_v2.json','capsule/results/independent_saved_array_audit114.json','capsule/results/comparison_policy_aggregation.json')
+          foreach ($name in $publicNames) {
+            $p = Join-Path $out $name
+            if (Test-Path -LiteralPath $p -PathType Leaf) {
+              $item = Get-Item -LiteralPath $p
+              Write-Output ("EVIDENCE_FILE " + $name + " SHA256 " + (Get-FileHash -LiteralPath $p -Algorithm SHA256).Hash.ToLower() + " BYTES " + $item.Length)
+              if ($item.Length -le 4194304) { Get-Content -LiteralPath $p -Raw | Write-Output }
+              else { Write-Output 'TRUNCATED_LOG_TAIL_ONLY'; Get-Content -LiteralPath $p -Tail 200 | Write-Output }
+            } else { Write-Output ("EVIDENCE_MISSING " + $name) }
+          }
+          $rootEvidence = Join-Path $env:RUNNER_TEMP 'so101-public-physics-evidence.json'
+          if (Test-Path -LiteralPath $rootEvidence) { Get-Content -LiteralPath $rootEvidence -Raw | Write-Output }
+          Write-Output "::$stopToken::"
