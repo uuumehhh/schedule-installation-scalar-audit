@@ -89,7 +89,10 @@ jobs:
           Invoke-WebRequest -Uri $env:MESA_URL -OutFile $mesaArchive
           if ((Get-Item -LiteralPath $mesaArchive).Length -ne 16278300) { throw 'Mesa archive size mismatch.' }
           if ((Get-FileHash -LiteralPath $mesaArchive -Algorithm SHA256).Hash.ToLower() -ne $env:MESA_SHA256) { throw 'Mesa archive hash mismatch.' }
-          tar.exe -xf $mesaArchive -C $mesaRoot opengl32.dll
+          $extractor = Join-Path $env:ProgramFiles '7-Zip/7z.exe'
+          if (-not (Test-Path -LiteralPath $extractor -PathType Leaf)) { throw 'Required runner-provided 7-Zip extractor is absent.' }
+          [ordered]@{extractor=$extractor;sha256=(Get-FileHash -LiteralPath $extractor -Algorithm SHA256).Hash.ToLower();version=(Get-Item -LiteralPath $extractor).VersionInfo.FileVersion;purpose='acquisition-only exact root member extraction'} | ConvertTo-Json -Compress | Write-Output
+          & $extractor e $mesaArchive ("-o" + $mesaRoot) opengl32.dll -y
           if ($LASTEXITCODE -ne 0) { throw 'Mesa WGL member extraction failed.' }
           $mesaDll = Join-Path $mesaRoot 'opengl32.dll'
           if ((Get-FileHash -LiteralPath $mesaDll -Algorithm SHA256).Hash.ToLower() -ne $env:MESA_DLL_SHA256) { throw 'Mesa WGL member hash mismatch.' }
