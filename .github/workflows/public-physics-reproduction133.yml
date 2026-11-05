@@ -21,7 +21,7 @@ jobs:
       PYTHON_URL: https://releases.astral.sh/github/python-build-standalone/releases/download/20260901/cpython-3.12.14%2B20260901-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
       PYTHON_SHA256: 7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14
       LOCK_SHA256: c4e51265864da6454744b913e6ff0d522d4e8a5a1345211e49466d00c17f7d64
-      EXPECTED_PHYSICS_INVENTORY_SHA256: bae31f4e36f62b60be92a998e24f3719a9cf345936e172d7fb86fdfa4891e548
+      EXPECTED_PHYSICS_INVENTORY_SHA256: fbc1fe5a5950ec44fce18d6a33d7ddf18ba2a278faeab1a1c42f2e24be326ff0
     steps:
       - name: Acquisition and installation only
         shell: pwsh
