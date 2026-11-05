@@ -129,48 +129,74 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $env:MUJOCO_GL = 'glfw'
           $smoke = @'
-          import ctypes, hashlib, json, os, pathlib, time
+          import ctypes, hashlib, json, os, pathlib, sys, time
           from ctypes import wintypes
-          import mujoco
-          import numpy as np
-          from OpenGL import GL
           started=time.monotonic()
-          model=mujoco.MjModel.from_xml_string('<mujoco><worldbody><light pos="0 0 2"/><geom type="sphere" size="0.1" pos="0 0 0"/></worldbody></mujoco>')
-          data=mujoco.MjData(model)
-          mujoco.mj_forward(model,data)
-          with mujoco.Renderer(model,height=64,width=64) as renderer:
-              renderer.update_scene(data)
-              rgb=renderer.render()
-              renderer.enable_depth_rendering()
-              depth=renderer.render()
-              identity={}
-              for key,value in [('vendor',GL.GL_VENDOR),('renderer',GL.GL_RENDERER),('version',GL.GL_VERSION)]:
-                  found=GL.glGetString(value)
-                  identity[key]=found.decode(errors='replace') if found else None
-              if rgb.shape!=(64,64,3) or depth.shape!=(64,64): raise RuntimeError('Renderer shape mismatch')
-              if not np.isfinite(depth).all() or not identity['vendor'] or not identity['version']: raise RuntimeError('Nonfinite depth or missing GL identity')
-              if not identity['renderer'] or 'llvmpipe' not in identity['renderer'].lower(): raise RuntimeError('Expected llvmpipe capability context')
-              kernel=ctypes.WinDLL('kernel32', use_last_error=True)
-              kernel.GetModuleHandleW.argtypes=[wintypes.LPCWSTR]
-              kernel.GetModuleHandleW.restype=wintypes.HMODULE
-              kernel.GetModuleFileNameW.argtypes=[wintypes.HMODULE,wintypes.LPWSTR,wintypes.DWORD]
-              kernel.GetModuleFileNameW.restype=wintypes.DWORD
+          receipt=pathlib.Path(os.environ['RUNNER_TEMP'],'so101-public-physics','renderer_capability133.json')
+          record={'kind':'synthetic_renderer_capability_only','complete':False,'physics_steps':0,'synthetic_forward_calls':0,'synthetic_render_calls':0,'does_not_identify_later_physics_context':True,'module_observations':{}}
+          kernel=ctypes.WinDLL('kernel32',use_last_error=True)
+          kernel.GetModuleHandleW.argtypes=[wintypes.LPCWSTR]
+          kernel.GetModuleHandleW.restype=wintypes.HMODULE
+          kernel.GetModuleFileNameW.argtypes=[wintypes.HMODULE,wintypes.LPWSTR,wintypes.DWORD]
+          kernel.GetModuleFileNameW.restype=wintypes.DWORD
+          def module_identity():
               module=kernel.GetModuleHandleW('opengl32.dll')
+              if not module: return {'loaded':False,'path':None,'sha256':None}
               buffer=ctypes.create_unicode_buffer(32768)
-              count=kernel.GetModuleFileNameW(module,buffer,len(buffer)) if module else 0
+              count=kernel.GetModuleFileNameW(module,buffer,len(buffer))
               if not count or count>=len(buffer): raise RuntimeError('Cannot identify loaded WGL module')
-              loaded=pathlib.Path(buffer.value).resolve()
-              intended=pathlib.Path(os.environ['BASE_PYTHON']).resolve().parent / 'opengl32.dll'
-              if loaded != intended: raise RuntimeError('Loaded WGL module is outside isolated runtime')
-              module_sha=hashlib.sha256(loaded.read_bytes()).hexdigest()
-              if module_sha!=os.environ['MESA_DLL_SHA256']: raise RuntimeError('Loaded WGL module hash mismatch')
-              identity['loaded_module_path']=str(loaded)
-              identity['loaded_module_sha256']=module_sha
-          elapsed=time.monotonic()-started
-          if elapsed>60: raise RuntimeError('Capability deadline exceeded')
-          evidence={'kind':'synthetic_renderer_capability_only','complete':True,'physics_steps':0,'synthetic_forward_calls':1,'synthetic_render_calls':2,'elapsed_seconds':elapsed,'capability_context_GL':identity,'does_not_identify_later_physics_context':True}
-          pathlib.Path(os.environ['RUNNER_TEMP'],'so101-public-physics','renderer_capability133.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')
-          print(json.dumps(evidence))
+              path=pathlib.Path(buffer.value).resolve()
+              return {'loaded':True,'path':str(path),'sha256':hashlib.sha256(path.read_bytes()).hexdigest()}
+          error=None
+          try:
+              record['module_observations']['before_imports']=module_identity()
+              import mujoco
+              import glfw
+              import numpy as np
+              record['module_observations']['after_imports']=module_identity()
+              model=mujoco.MjModel.from_xml_string('<mujoco><worldbody><light pos="0 0 2"/><geom type="sphere" size="0.1" pos="0 0 0"/></worldbody></mujoco>')
+              data=mujoco.MjData(model)
+              mujoco.mj_forward(model,data)
+              record['synthetic_forward_calls']=1
+              with mujoco.Renderer(model,height=64,width=64) as renderer:
+                  loaded=module_identity()
+                  record['module_observations']['after_renderer_creation']=loaded
+                  intended=pathlib.Path(os.environ['BASE_PYTHON']).resolve().parent/'opengl32.dll'
+                  if not loaded['loaded'] or pathlib.Path(loaded['path'])!=intended: raise RuntimeError('Loaded WGL module is outside isolated runtime')
+                  if loaded['sha256']!=os.environ['MESA_DLL_SHA256']: raise RuntimeError('Loaded WGL module hash mismatch')
+                  renderer.update_scene(data)
+                  rgb=renderer.render()
+                  record['synthetic_render_calls']=1
+                  renderer.enable_depth_rendering()
+                  depth=renderer.render()
+                  record['synthetic_render_calls']=2
+                  address=glfw.get_proc_address('glGetString')
+                  if not address: raise RuntimeError('Current context has no glGetString')
+                  get_string=ctypes.WINFUNCTYPE(ctypes.c_char_p,ctypes.c_uint)(address)
+                  identity={}
+                  for key,value in [('vendor',0x1F00),('renderer',0x1F01),('version',0x1F02)]:
+                      found=get_string(value)
+                      identity[key]=found.decode(errors='replace') if found else None
+                  record['capability_context_GL']=identity
+                  if rgb.shape!=(64,64,3) or depth.shape!=(64,64): raise RuntimeError('Renderer shape mismatch')
+                  if not np.isfinite(depth).all() or not identity['vendor'] or not identity['version']: raise RuntimeError('Nonfinite depth or missing GL identity')
+                  if not identity['renderer'] or 'llvmpipe' not in identity['renderer'].lower(): raise RuntimeError('Expected llvmpipe capability context')
+              if time.monotonic()-started>60: raise RuntimeError('Capability deadline exceeded')
+              record['complete']=True
+          except BaseException as exc:
+              error=exc
+              record['error']={'type':type(exc).__name__,'message':str(exc)}
+              try: record['module_observations']['at_failure']=module_identity()
+              except BaseException as diagnostic: record['module_diagnostic_error']={'type':type(diagnostic).__name__,'message':str(diagnostic)}
+              raise
+          finally:
+              record['elapsed_seconds']=time.monotonic()-started
+              try:
+                  receipt.write_text(json.dumps(record,indent=2),encoding='utf-8')
+                  print(json.dumps(record))
+              except BaseException as persistence:
+                  print('CAPABILITY_RECEIPT_ERROR '+repr(persistence),file=sys.stderr)
+                  if error is None: raise
           '@
           $smokePath = Join-Path $env:RUNNER_TEMP 'fixed_renderer_capability133.py'
           Set-Content -LiteralPath $smokePath -Value $smoke -Encoding utf8
