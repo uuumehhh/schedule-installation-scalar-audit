@@ -20,6 +20,12 @@ jobs:
       PACKAGE_SHA256: 4c2e48e1711564791cb5a62291fe48edd60b057480146de6be37acb97a5a925f
       PYTHON_URL: https://releases.astral.sh/github/python-build-standalone/releases/download/20260901/cpython-3.12.14%2B20260901-x86_64-pc-windows-msvc-install_only_stripped.tar.gz
       PYTHON_SHA256: 7c45c9622400d578709a9b2cddbe8124cc21d382409d9f13406d706d28e31b14
+      MESA_URL: https://github.com/mmozeiko/build-mesa/releases/download/26.2.6/mesa-llvmpipe-x64-26.2.6.7z
+      MESA_SHA256: 1910245962e3d854589ed11a9a488e84841a01559142fba8b81395271981700b
+      MESA_DLL_SHA256: e833d30337077e5890bf6a7147b7f2d27526b6f4647b32d8c8151fc57860c7f2
+      MUJOCO_GL: glfw
+      GALLIUM_DRIVER: llvmpipe
+      LIBGL_ALWAYS_SOFTWARE: '1'
       LOCK_SHA256: c4e51265864da6454744b913e6ff0d522d4e8a5a1345211e49466d00c17f7d64
       EXPECTED_PHYSICS_INVENTORY_SHA256: fbc1fe5a5950ec44fce18d6a33d7ddf18ba2a278faeab1a1c42f2e24be326ff0
     steps:
@@ -74,6 +80,35 @@ jobs:
           foreach ($p in $images) {
             if (-not $p.StartsWith([IO.Path]::GetFullPath($stage) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $p -PathType Leaf)) { throw 'Unexpected interpreter image outside isolated installation.' }
           }
+
+          # Static maintainer-built Mesa WGL runtime, isolated beside these Python executables only.
+          # No system DLL/registry changes and no public-package source changes.
+          $mesaRoot = Join-Path $stage 'mesa'
+          New-Item -ItemType Directory -Path $mesaRoot | Out-Null
+          $mesaArchive = Join-Path $mesaRoot 'mesa-llvmpipe-x64-26.2.6.7z'
+          Invoke-WebRequest -Uri $env:MESA_URL -OutFile $mesaArchive
+          if ((Get-Item -LiteralPath $mesaArchive).Length -ne 16278300) { throw 'Mesa archive size mismatch.' }
+          if ((Get-FileHash -LiteralPath $mesaArchive -Algorithm SHA256).Hash.ToLower() -ne $env:MESA_SHA256) { throw 'Mesa archive hash mismatch.' }
+          tar.exe -xf $mesaArchive -C $mesaRoot opengl32.dll
+          if ($LASTEXITCODE -ne 0) { throw 'Mesa WGL member extraction failed.' }
+          $mesaDll = Join-Path $mesaRoot 'opengl32.dll'
+          if ((Get-FileHash -LiteralPath $mesaDll -Algorithm SHA256).Hash.ToLower() -ne $env:MESA_DLL_SHA256) { throw 'Mesa WGL member hash mismatch.' }
+          $dllBytes = [IO.File]::ReadAllBytes($mesaDll)
+          $peOffset = [BitConverter]::ToInt32($dllBytes,60)
+          if ($dllBytes.Length -ne 58635264 -or $peOffset -lt 64 -or $peOffset + 26 -ge $dllBytes.Length) { throw 'Mesa member size/header mismatch.' }
+          if ([BitConverter]::ToUInt32($dllBytes,$peOffset) -ne 0x4550 -or [BitConverter]::ToUInt16($dllBytes,$peOffset+4) -ne 0x8664 -or [BitConverter]::ToUInt16($dllBytes,$peOffset+24) -ne 0x20b) { throw 'Mesa member is not AMD64 PE32+.' }
+          if (-not [String]::Equals([IO.Path]::GetFullPath($identity.running_image),[IO.Path]::GetFullPath($basePython),[StringComparison]::OrdinalIgnoreCase)) { throw 'Unexpected running image; no alternate DLL destination.' }
+          $imageDir = Split-Path -Parent ([IO.Path]::GetFullPath($identity.running_image))
+          if (-not $imageDir.StartsWith([IO.Path]::GetFullPath($stage) + [IO.Path]::DirectorySeparatorChar,[StringComparison]::OrdinalIgnoreCase)) { throw 'Mesa destination outside isolated runtime.' }
+          $destination = Join-Path $imageDir 'opengl32.dll'
+          if (Test-Path -LiteralPath $destination) { throw 'Refuse to replace any existing OpenGL DLL.' }
+          Copy-Item -LiteralPath $mesaDll -Destination $destination
+          if ((Get-FileHash -LiteralPath $destination -Algorithm SHA256).Hash.ToLower() -ne $env:MESA_DLL_SHA256) { throw 'Mesa installed member hash mismatch.' }
+          $dllDestinations = @($destination)
+          $mesaBinding = [ordered]@{schema='stage133-isolated-mesa-environment-v1';provider='mmozeiko/build-mesa maintainer build, not Mesa upstream official binary';release='26.2.6';build_commit='6fb246704c202c4afae5cce0b70c79004025a9de';archive_sha256=$env:MESA_SHA256;dll_sha256=$env:MESA_DLL_SHA256;dll_destinations=$dllDestinations;system_changed=$false;public_package_changed=$false;original_stock_renderer_failure_run=42106186975}
+          $mesaBinding | ConvertTo-Json -Depth 5 | Out-File -LiteralPath (Join-Path $stage 'mesa_binding133.json') -Encoding utf8
+          $mesaBinding | ConvertTo-Json -Depth 5 -Compress | Write-Output
+
           $identity | ConvertTo-Json -Compress | Write-Output
           $imageJson = ConvertTo-Json -InputObject @($images) -Compress
           "SCIENTIFIC_IMAGES=$imageJson" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -91,8 +126,10 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $env:MUJOCO_GL = 'glfw'
           $smoke = @'
-          import json, time
+          import ctypes, hashlib, json, os, pathlib, time
+          from ctypes import wintypes
           import mujoco
+          import numpy as np
           from OpenGL import GL
           started=time.monotonic()
           model=mujoco.MjModel.from_xml_string('<mujoco><worldbody><light pos="0 0 2"/><geom type="sphere" size="0.1" pos="0 0 0"/></worldbody></mujoco>')
@@ -108,9 +145,29 @@ jobs:
                   found=GL.glGetString(value)
                   identity[key]=found.decode(errors='replace') if found else None
               if rgb.shape!=(64,64,3) or depth.shape!=(64,64): raise RuntimeError('Renderer shape mismatch')
+              if not np.isfinite(depth).all() or not identity['vendor'] or not identity['version']: raise RuntimeError('Nonfinite depth or missing GL identity')
+              if not identity['renderer'] or 'llvmpipe' not in identity['renderer'].lower(): raise RuntimeError('Expected llvmpipe capability context')
+              kernel=ctypes.WinDLL('kernel32', use_last_error=True)
+              kernel.GetModuleHandleW.argtypes=[wintypes.LPCWSTR]
+              kernel.GetModuleHandleW.restype=wintypes.HMODULE
+              kernel.GetModuleFileNameW.argtypes=[wintypes.HMODULE,wintypes.LPWSTR,wintypes.DWORD]
+              kernel.GetModuleFileNameW.restype=wintypes.DWORD
+              module=kernel.GetModuleHandleW('opengl32.dll')
+              buffer=ctypes.create_unicode_buffer(32768)
+              count=kernel.GetModuleFileNameW(module,buffer,len(buffer)) if module else 0
+              if not count or count>=len(buffer): raise RuntimeError('Cannot identify loaded WGL module')
+              loaded=pathlib.Path(buffer.value).resolve()
+              intended=pathlib.Path(os.environ['BASE_PYTHON']).resolve().parent / 'opengl32.dll'
+              if loaded != intended: raise RuntimeError('Loaded WGL module is outside isolated runtime')
+              module_sha=hashlib.sha256(loaded.read_bytes()).hexdigest()
+              if module_sha!=os.environ['MESA_DLL_SHA256']: raise RuntimeError('Loaded WGL module hash mismatch')
+              identity['loaded_module_path']=str(loaded)
+              identity['loaded_module_sha256']=module_sha
           elapsed=time.monotonic()-started
           if elapsed>60: raise RuntimeError('Capability deadline exceeded')
-          print(json.dumps({'kind':'synthetic_renderer_capability_only','complete':True,'physics_steps':0,'synthetic_forward_calls':1,'synthetic_render_calls':2,'elapsed_seconds':elapsed,'capability_context_GL':identity,'does_not_identify_later_physics_context':True}))
+          evidence={'kind':'synthetic_renderer_capability_only','complete':True,'physics_steps':0,'synthetic_forward_calls':1,'synthetic_render_calls':2,'elapsed_seconds':elapsed,'capability_context_GL':identity,'does_not_identify_later_physics_context':True}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'so101-public-physics','renderer_capability133.json').write_text(json.dumps(evidence,indent=2),encoding='utf-8')
+          print(json.dumps(evidence))
           '@
           $smokePath = Join-Path $env:RUNNER_TEMP 'fixed_renderer_capability133.py'
           Set-Content -LiteralPath $smokePath -Value $smoke -Encoding utf8
@@ -249,6 +306,13 @@ jobs:
               if ($item.Length -le 4194304) { Get-Content -LiteralPath $p -Raw | Write-Output }
               else { Write-Output 'TRUNCATED_LOG_TAIL_ONLY'; Get-Content -LiteralPath $p -Tail 200 | Write-Output }
             } else { Write-Output ("EVIDENCE_MISSING " + $name) }
+          }
+          foreach ($environmentFile in @('mesa_binding133.json','renderer_capability133.json')) {
+            $environmentPath = Join-Path $stage $environmentFile
+            if (Test-Path -LiteralPath $environmentPath -PathType Leaf) {
+              Write-Output ("ENVIRONMENT_EVIDENCE " + $environmentFile + " SHA256 " + (Get-FileHash -LiteralPath $environmentPath -Algorithm SHA256).Hash.ToLower())
+              Get-Content -LiteralPath $environmentPath -Raw | Write-Output
+            } else { Write-Output ("ENVIRONMENT_EVIDENCE_MISSING " + $environmentFile) }
           }
           $rootEvidence = Join-Path $env:RUNNER_TEMP 'so101-public-physics-evidence.json'
           if (Test-Path -LiteralPath $rootEvidence) { Get-Content -LiteralPath $rootEvidence -Raw | Write-Output }
